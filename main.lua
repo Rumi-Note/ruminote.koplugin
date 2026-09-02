@@ -1,8 +1,8 @@
 --[[
-Ruminate 书摘 — KOReader 插件主体
+Ruminote 如觅书摘 — KOReader 插件主体
 
 职责：
-  1. 在阅读界面菜单加入 "Ruminate 书摘"（绑定账号 / 立即同步 / 查看队列 / 关于）
+  1. 在阅读界面菜单加入 "Ruminote 如觅书摘"（绑定账号 / 立即同步 / 查看队列 / 关于）
   2. 用户新增高亮时，把书摘写入本地上传队列（离线优先）
   3. 联网时把队列批量 POST 到 CloudBase 的 ruminateapi（幂等，后端去重）
   4. 6 位配对码绑定，换取长期 device_token 持久化到插件设置
@@ -67,10 +67,10 @@ function Ruminate:init()
     end
 end
 
--- 注册到 KOReader 主菜单（工具 → Ruminate 书摘）
+-- 注册到 KOReader 主菜单（工具 → Ruminote 如觅书摘）
 function Ruminate:addToMainMenu(menu_items)
     menu_items.ruminate = {
-        text = _("Ruminate 书摘"),
+        text = _("Ruminote 如觅书摘"),
         sorting_hint = "tools",
         sub_item_table = {
             {
@@ -111,11 +111,11 @@ function Ruminate:addToMainMenu(menu_items)
                 callback = function() self:_showBindDialog() end,
             },
             {
-                text = _("关于 Ruminate 书摘"),
+                text = _("关于 Ruminote 如觅书摘"),
                 keep_menu_open = true,
                 callback = function()
                     UIManager:show(InfoMessage:new{
-                        text = _("Ruminate 书摘\n好的句子，值得再嚼一遍。\n\n划线自动收进云端，随时回看。"),
+                        text = _("Ruminote 如觅书摘\n好句子，值得再嚼一遍。\n\n划线自动收进云端，随时回看。"),
                     })
                 end,
             },
@@ -263,7 +263,7 @@ function Ruminate:tryFlush(interactive)
         self.queue = {}
         self:_saveQueue()
         if interactive then
-            UIManager:show(InfoMessage:new{ text = T(_("已同步 %1 条书摘到 Ruminate。"), n) })
+            UIManager:show(InfoMessage:new{ text = T(_("已同步 %1 条书摘到 Ruminote。"), n) })
         end
     else
         if interactive then
@@ -309,7 +309,7 @@ end
 function Ruminate:_showBindDialog()
     local dialog
     dialog = InputDialog:new{
-        title = _("绑定 Ruminate 账号"),
+        title = _("绑定 Ruminote 账号"),
         input_hint = _("在小程序里生成 6 位配对码"),
         input_type = "number",
         buttons = {{
@@ -357,7 +357,7 @@ function Ruminate:_bind(pair_code)
     local resp = json.decode(table.concat(respbody))
     if resp and resp.ok and resp.device_token then
         self:_saveToken(resp.device_token)
-        UIManager:show(InfoMessage:new{ text = _("绑定成功！以后划线会自动同步到 Ruminate。") })
+        UIManager:show(InfoMessage:new{ text = _("绑定成功！以后划线会自动同步到 Ruminote。") })
         self:tryFlush(false)
     else
         UIManager:show(InfoMessage:new{ text = _("配对码无效或已过期，请重新生成。") })
