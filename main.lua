@@ -46,6 +46,7 @@ function Ruminate:_loadSettings()
     self.api_base = self.settings:readSetting("api_base") or DEFAULT_API_BASE
     self.device_token = self.settings:readSetting("device_token") -- 可能为 nil（未绑定）
     self.queue = self.settings:readSetting("queue") or {}          -- 待上传书摘数组
+    self.synced = self.settings:readSetting("synced") or {}        -- 已成功同步的 hid 集合 { [hid]=true }（增量同步用）
 
     -- device_id：本设备唯一标识，首次生成后持久化，永不变。
     -- 云端 devices 集合以 device_id 为主键做全局唯一归属；重装插件若沿用同一 device_id
@@ -76,6 +77,11 @@ end
 
 function Ruminate:_saveQueue()
     self.settings:saveSetting("queue", self.queue)
+    self.settings:flush()
+end
+
+function Ruminate:_saveSynced()
+    self.settings:saveSetting("synced", self.synced)
     self.settings:flush()
 end
 
@@ -234,7 +240,8 @@ function Ruminate:_enqueueLatestAnnotations()
             local hid = fingerprint.compute_highlight_id(
                 fingerprint.compute_book_id("", book.title, book.author),
                 chapter, text, pos0, pos1)
-            if not self:_inQueue(hid) then
+            -- 增量：已成功同步过(synced)或已在队列的，都不再入队
+            if not self.synced[hid] and not self:_inQueue(hid) then
                 table.insert(self.queue, {
                     _local_id = hid,
                     book = book,
@@ -344,10 +351,26 @@ function Ruminate:tryFlush(interactive)
     local ok, resp = self:_postBatch(items)
     if ok then
         local n = #self.queue
+        local quotaHit = type(resp) == "table" and resp.quota_exceeded
+        if not quotaHit then
+            -- 整批成功（云端已入库或 duplicated）→ 记入已同步集，实现增量：以后不再重传这些。
+            for _, q in ipairs(self.queue) do
+                if q._local_id then self.synced[q._local_id] = true end
+            end
+            self:_saveSynced()
+        end
+        -- quota_exceeded 时整批不记 synced：下次全量扫描会重新入队重传，靠云端 hid 幂等去重（数据量小，可接受）。
         self.queue = {}
         self:_saveQueue()
-        if interactive then
-            UIManager:show(InfoMessage:new{ text = T(_("已同步 %1 条书摘到 Ruminote。"), n) })
+        if quotaHit then
+            -- 额度用完：已扣额度的部分入库，超额部分未上传。额度提示对用户重要，静默模式下也弹。
+            UIManager:show(InfoMessage:new{
+                text = resp.message or _("创建书摘次数已用完，请在 Ruminote 小程序购买使用次数后再同步。"),
+                timeout = 8,
+            })
+        elseif interactive then
+            local acc = (type(resp) == "table" and resp.accepted) or n
+            UIManager:show(InfoMessage:new{ text = T(_("已同步 %1 条书摘到 Ruminote。"), acc) })
         end
     else
         if interactive then
@@ -386,7 +409,9 @@ function Ruminate:_postBatch(items)
     if code ~= 200 then
         return false, "HTTP " .. tostring(code)
     end
-    return true, table.concat(respbody)
+    local json = require("json")
+    local parsed = json.decode(table.concat(respbody)) or {}
+    return true, parsed
 end
 
 -- ============ 绑定 ============
