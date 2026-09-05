@@ -27,10 +27,10 @@ local T = require("ffi/util").template
 local fingerprint = require("fingerprint")
 
 -- ============ 配置 ============
--- CloudBase HTTP 访问服务基地址（见 docs/ENV.md）。末尾不要带斜杠。
--- ⚠️ 阶段二联调前，把 ruminateapi 挂到 HTTP 访问服务后，用真实域名替换此处，
---    路径形如  <base>/ruminateapi/device/bind  或自定义映射的  <base>/device/bind
-local DEFAULT_API_BASE = "https://cloud1-d2gao2pxfdeb837d8-1477949046.ap-shanghai.app.tcloudbase.com/ruminateapi"
+-- CloudBase HTTP 网关基地址（企业号新环境 cloud1-d7g8j2h4675ed447b）。末尾不要带斜杠。
+-- HTTP 网关路由：/ruminateapi -> 云函数 ruminateapi（路径透传开启，身份认证关闭）。
+-- 云函数用 path.endsWith 匹配，故带 /ruminateapi 前缀的完整路径也能命中。
+local DEFAULT_API_BASE = "https://cloud1-d7g8j2h4675ed447b-1480876426.ap-shanghai.app.tcloudbase.com/ruminateapi"
 
 local Ruminate = WidgetContainer:extend{
     name = "ruminate",
@@ -46,6 +46,32 @@ function Ruminate:_loadSettings()
     self.api_base = self.settings:readSetting("api_base") or DEFAULT_API_BASE
     self.device_token = self.settings:readSetting("device_token") -- 可能为 nil（未绑定）
     self.queue = self.settings:readSetting("queue") or {}          -- 待上传书摘数组
+
+    -- device_id：本设备唯一标识，首次生成后持久化，永不变。
+    -- 云端 devices 集合以 device_id 为主键做全局唯一归属；重装插件若沿用同一 device_id
+    -- 可在原账号幂等重绑，换账号则需先在原账号小程序解绑。ko_ 前缀标识终端类型。
+    self.device_id = self.settings:readSetting("device_id")
+    if not self.device_id then
+        self.device_id = self:_genDeviceId()
+        self.settings:saveSetting("device_id", self.device_id)
+        self.settings:flush()
+    end
+end
+
+-- 生成唯一 device_id：ko_ + 时间戳 + 随机十六进制。无需真实设备指纹（隐私/稳定性）。
+function Ruminate:_genDeviceId()
+    math.randomseed(os.time() + os.clock() * 1000000)
+    local rnd = ""
+    for _ = 1, 16 do rnd = rnd .. string.format("%x", math.random(0, 15)) end
+    return "ko_" .. tostring(os.time()) .. "_" .. rnd
+end
+
+-- 设备显示名（小程序设备列表可读）。KOReader 提供的设备型号信息有限，给个可辨识的默认名。
+function Ruminate:_deviceName()
+    local model
+    local ok, Device = pcall(require, "device")
+    if ok and Device and Device.model then model = Device.model end
+    return "KOReader" .. (model and (" · " .. tostring(model)) or "")
 end
 
 function Ruminate:_saveQueue()
@@ -65,6 +91,62 @@ function Ruminate:init()
     if self.ui and self.ui.menu then
         self.ui.menu:registerToMainMenu(self)
     end
+    -- 启动周期自动同步（插件运行期间每 10 分钟静默尝试一次）
+    self:_scheduleAutoSync()
+end
+
+-- ============ 自动同步组合 ============
+-- 触发时机：① 周期定时(10min) ② 关书 ③ 挂起/唤醒 ④ 菜单手动(兜底)。
+-- 联网检测：tryFlush 内部已判 NetworkMgr:isOnline()，离线则只留队列不报错。
+-- 全部走 interactive=false（静默），不打扰阅读；手动「立即同步」才有提示。
+local AUTO_SYNC_INTERVAL = 10 * 60 -- 秒
+
+function Ruminate:_scheduleAutoSync()
+    self:_cancelAutoSync()
+    self._autoSyncScheduled = true
+    self._autoSyncFn = function()
+        if not self._autoSyncScheduled then return end
+        -- 扫描当前书新增标注入队，再静默尝试上传
+        pcall(function() self:_enqueueLatestAnnotations() end)
+        pcall(function() self:tryFlush(false) end)
+        -- 重新排下一次（循环）
+        self:_scheduleAutoSync()
+    end
+    UIManager:scheduleIn(AUTO_SYNC_INTERVAL, self._autoSyncFn)
+end
+
+function Ruminate:_cancelAutoSync()
+    self._autoSyncScheduled = false
+    if self._autoSyncFn and UIManager.unschedule then
+        UIManager:unschedule(self._autoSyncFn)
+        self._autoSyncFn = nil
+    end
+end
+
+-- 静默同步：扫描当前书 + 尝试上传（不打扰）
+function Ruminate:_autoSyncNow()
+    pcall(function() self:_enqueueLatestAnnotations() end)
+    pcall(function() self:tryFlush(false) end)
+end
+
+-- 关书：把当前书的标注收尾同步
+function Ruminate:onCloseDocument()
+    self:_autoSyncNow()
+end
+
+-- 设备挂起（息屏/合盖）前：抓紧同步一次
+function Ruminate:onSuspend()
+    self:_autoSyncNow()
+end
+
+-- 唤醒后：网络可能恢复，补一次
+function Ruminate:onResume()
+    self:_autoSyncNow()
+end
+
+-- 插件卸载/退出：停掉定时器，避免泄漏
+function Ruminate:onClose()
+    self:_cancelAutoSync()
 end
 
 -- 注册到 KOReader 主菜单（工具 → Ruminote 如觅书摘）
@@ -126,8 +208,10 @@ end
 -- ============ 高亮事件：入队 ============
 -- KOReader 在保存高亮/笔记后会广播事件。不同版本事件名有差异，
 -- 这里挂较通用的 onSaveHighlight；若你的版本用别的钩子，可在 README 里改。
+-- 触发到时：入队 + 联网则静默即传（"划线即传"，失败不打扰，留队列）。
 function Ruminate:onSaveHighlight()
     self:_enqueueLatestAnnotations()
+    pcall(function() self:tryFlush(false) end)
 end
 
 -- 从当前文档的 annotations 表提取尚未入队的高亮，加入队列。
@@ -335,7 +419,12 @@ function Ruminate:_bind(pair_code)
     local ltn12 = require("ltn12")
     local json = require("json")
 
-    local body = json.encode({ pair_code = pair_code })
+    local body = json.encode({
+        pair_code = pair_code,
+        device_id = self.device_id,
+        device_name = self:_deviceName(),
+        platform = "koreader",
+    })
     local respbody = {}
     local url = self.api_base .. "/device/bind"
     local ok, code = pcall(function()
@@ -350,11 +439,25 @@ function Ruminate:_bind(pair_code)
         }
         return c
     end)
-    if not ok or code ~= 200 then
-        UIManager:show(InfoMessage:new{ text = _("绑定失败，请检查配对码或网络。") })
+    if not ok then
+        UIManager:show(InfoMessage:new{ text = _("绑定失败，请检查网络连接。") })
         return
     end
-    local resp = json.decode(table.concat(respbody))
+    -- 无论状态码都尝试解析响应体，以便读出业务错误码（如设备已绑其他账号）
+    local resp = json.decode(table.concat(respbody)) or {}
+    if code ~= 200 then
+        if resp.code == "DEVICE_BOUND_ELSEWHERE" then
+            UIManager:show(InfoMessage:new{
+                text = _("这台设备已绑定到其他账号。\n请先在原账号的 Ruminote 小程序「我的 → 我的设备」里解除这台设备的绑定，再重新绑定。"),
+                timeout = 8,
+            })
+        else
+            UIManager:show(InfoMessage:new{
+                text = T(_("绑定失败：%1"), resp.message or _("请检查配对码或网络")),
+            })
+        end
+        return
+    end
     if resp and resp.ok and resp.device_token then
         self:_saveToken(resp.device_token)
         UIManager:show(InfoMessage:new{ text = _("绑定成功！以后划线会自动同步到 Ruminote。") })
