@@ -2,43 +2,70 @@
 
 > 好句子，值得再嚼一遍。
 
-[KOReader](https://github.com/koreader/koreader) 阅读器插件：把你在电子书上的划线自动收进 Ruminote 云端，随时在小程序里回看、反复咀嚼。
+[KOReader](https://github.com/koreader/koreader) 阅读器插件：把你在电子书上的划线自动同步到 **Ruminote 如觅书摘** 云端，随时在微信小程序里回看、反复咀嚼。
+
+## ⚠️ 使用前提
+
+本插件是 **Ruminote 如觅书摘** 微信小程序的 KOReader 同步客户端，**不是独立工具**：
+
+- 需要先有 Ruminote 如觅书摘小程序账号（微信搜索「Ruminote 如觅书摘」）
+- 绑定时需在小程序里生成 **6 位配对码**，插件输入后完成设备绑定
+- 划线数据同步到 Ruminote 云端，仅本人可见
+
+如果你只想要纯本地的高亮导出、不接入 Ruminote，本插件不适合你。
 
 ## 功能
 
-- 在 KOReader 主菜单（工具）加入「Ruminote 如觅书摘」入口：绑定账号 / 立即同步 / 查看队列 / 关于
-- **离线优先**：新增划线先写本地上传队列，联网时批量上传（应对 e-ink 设备间歇 Wi-Fi）
-- **幂等上传**：每条书摘的 `highlight_id` 由 `fingerprint.lua` 的 sha256 指纹计算，与云端 JS 实现一致，后端去重
-- **6 位配对码绑定**：换取长期 `device_token` 持久化到插件设置
+- KOReader 工具菜单加入「Ruminote 如觅书摘」入口：绑定账号 / 立即同步 / 查看待上传 / 关于
+- **自动同步**：定时（每 10 分钟）+ 关书 / 挂起 / 唤醒 + 划线时（部分版本）+ 手动，全部静默；联网即传，离线留队列
+- **增量上传**：本地记录已同步指纹，只传新增的划线，不重复上传
+- **幂等去重**：每条书摘 `highlight_id` 由 `fingerprint.lua` 的 sha256 指纹计算，与云端一致，后端二次去重
+- **6 位配对码绑定**：换取长期 `device_token`；一台设备全局唯一归属，换绑需先在原账号小程序解绑
+
+## 安装
+
+### 方式一：App Store 插件（推荐，需先装 AppStore）
+
+如果你已安装社区的 [AppStore 插件](https://github.com/omer-faruq/appstore.koplugin)：
+
+1. KOReader → 工具 → **App Store** → Plugins
+2. 搜索 `ruminote` 或 `Ruminote`，找到本插件 → **Install**
+3. 重启 KOReader
+
+### 方式二：手动安装（通用）
+
+1. 从 [Releases](#) 下载 `ruminote.koplugin.zip` 并解压，得到 `ruminote.koplugin/` 文件夹
+2. 放进 KOReader 的 `plugins/` 目录：
+   - **Android**：`/sdcard/koreader/plugins/`
+   - **Kobo / Kindle**：`koreader/plugins/`
+   - **桌面 (Linux)**：`~/.config/koreader/plugins/`
+   - ⚠️ 确保是 `plugins/ruminote.koplugin/main.lua`，不要多套一层目录
+3. 完全重启 KOReader（杀进程重开，非返回）
+4. 阅读界面 → 工具菜单 → 找到「Ruminote 如觅书摘」
+
+### 绑定
+
+小程序「我的 → 我的设备 → 绑定新设备」生成 6 位配对码 → 插件「绑定账号」输入 → 绑定成功后划线自动同步。
 
 ## 文件
 
 ```
-koplugin/
-├── _meta.lua         # 插件元信息（显示名 / 描述）
-├── main.lua          # 主体：菜单、离线队列、批量上传、绑定
-└── fingerprint.lua   # sha256 书摘指纹（与云端一致，用于幂等去重）
+_meta.lua        # 插件元信息（显示名 / 描述 / 版本）
+main.lua         # 主体：菜单、离线队列、增量/自动同步、绑定
+fingerprint.lua  # sha256 书摘指纹（与云端一致，用于幂等去重）
 ```
 
-> 内部标识符为 `ruminate`（`name = "ruminate"`）；用户可见品牌名为 **Ruminote 如觅书摘**。
-
-## 安装
-
-1. 把 `koplugin/` 打包为 `ruminote.koplugin`（或复制目录）放进 KOReader 的 `plugins/` 目录
-   - 目录名须以 `.koplugin` 结尾，例如 `plugins/ruminote.koplugin/`
-2. 重启 KOReader，在 阅读界面 → 工具菜单 找到「Ruminote 如觅书摘」
-3. 首次使用：小程序生成 6 位配对码 → 插件「绑定账号」输入 → 绑定成功后划线自动同步
-
-## 配置
-
-- 插件顶部 `API_BASE` 指向 CloudBase HTTP 访问服务地址（`/ruminateapi` 路由）
-- 上传请求带 `X-Device-Token` 头鉴权
+> 内部标识符为 `ruminate`；用户可见品牌名为 **Ruminote 如觅书摘**。
 
 ## 兼容性
 
-- 锁定较新稳定版 KOReader（使用 `annotations` 表）
-- `onSaveHighlight` 在部分版本不触发 → 已改为同步时主动扫描当前书 annotations（多来源兜底）
+- 需要较新稳定版 KOReader（使用 `annotations` 表）
+- `onSaveHighlight` 在部分版本不触发 → 已改为同步时主动扫描当前书 annotations（多来源兜底）+ 定时/关书兜底
 
-## 相关仓库
+## 相关
 
-- 小程序端：`gitee.com/ruminote/wx-miniprogram`
+- 小程序端：微信搜索「Ruminote 如觅书摘」
+
+## License
+
+GPL-3.0（见 LICENSE）。
