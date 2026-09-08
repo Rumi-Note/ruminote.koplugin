@@ -4,17 +4,21 @@
 
 > Good sentences deserve a second chew.
 
-A [KOReader](https://github.com/koreader/koreader) plugin that automatically syncs your ebook highlights to the **Ruminote** cloud, so you can review and revisit them anytime in the Ruminote WeChat Mini Program.
+A [KOReader](https://github.com/koreader/koreader) plugin that automatically syncs your ebook highlights to the **Rumi书摘 (Ruminote)** cloud, so you can review and revisit them anytime in the Rumi书摘 WeChat Mini Program.
+
+## 🚧 Current status
+
+**The Rumi书摘 Mini Program has not launched yet, so the sync feature is not available for now.** This plugin's docs will be updated once the Mini Program is live, at which point you can bind and use it. You may install the plugin now and wait for the launch announcement.
 
 ## ⚠️ Prerequisite
 
-This plugin is the KOReader sync client for the **Ruminote** WeChat Mini Program — it is **not a standalone tool**:
+This plugin is the KOReader sync client for the **Rumi书摘 (Ruminote)** WeChat Mini Program — it is **not a standalone tool**:
 
-- You need a Ruminote Mini Program account (search "Ruminote 如觅书摘" in WeChat).
+- You need a Rumi书摘 Mini Program account (search "Rumi书摘" in WeChat; *available after launch*).
 - To bind, generate a **6-digit pairing code** in the Mini Program and enter it in the plugin.
-- Highlights are synced to the Ruminote cloud and are visible only to you.
+- Highlights are synced to the Rumi书摘 cloud and are visible only to you.
 
-If you just want local-only highlight export without Ruminote, this plugin is not for you.
+If you just want local-only highlight export without Rumi书摘, this plugin is not for you.
 
 ## Features
 
@@ -66,7 +70,7 @@ fingerprint.lua  # sha256 highlight fingerprint (matches cloud, for idempotent d
 
 ## Related
 
-- Mini Program: search "Ruminote 如觅书摘" in WeChat
+- Mini Program: search "Rumi书摘" in WeChat (*available after launch*)
 
 ## License
 
