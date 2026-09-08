@@ -1,5 +1,7 @@
 # Ruminote 如觅书摘 · KOReader 插件
 
+**简体中文** | [English](README.en.md)
+
 > 好句子，值得再嚼一遍。
 
 [KOReader](https://github.com/koreader/koreader) 阅读器插件：把你在电子书上的划线自动同步到 **Ruminote 如觅书摘** 云端，随时在微信小程序里回看、反复咀嚼。
