@@ -40,7 +40,7 @@
 
 ### 方式二：手动安装（通用）
 
-1. 从 [Releases](#) 下载 `ruminote.koplugin.zip` 并解压，得到 `ruminote.koplugin/` 文件夹
+1. 从 [Releases](https://gitee.com/ruminote/koreader-plugin/releases) 下载 `ruminote.koplugin.zip` 并解压，得到 `ruminote.koplugin/` 文件夹
 2. 放进 KOReader 的 `plugins/` 目录：
    - **Android**：`/sdcard/koreader/plugins/`
    - **Kobo / Kindle**：`koreader/plugins/`

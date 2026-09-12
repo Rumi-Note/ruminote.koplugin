@@ -40,7 +40,7 @@ If you have the community [AppStore plugin](https://github.com/omer-faruq/appsto
 
 ### Option 2: Manual install (universal)
 
-1. Download `ruminote.koplugin.zip` from [Releases](#) and unzip to get the `ruminote.koplugin/` folder
+1. Download `ruminote.koplugin.zip` from [Releases](https://gitee.com/ruminote/koreader-plugin/releases) and unzip to get the `ruminote.koplugin/` folder
 2. Copy it into KOReader's `plugins/` directory:
    - **Android**: `/sdcard/koreader/plugins/`
    - **Kobo / Kindle**: `koreader/plugins/`
