@@ -306,13 +306,30 @@ function Ruminate:_inQueue(local_id)
     return false
 end
 
+-- 从文件路径提取去扩展名的文件名，作为书名兜底
+-- （元数据 title 有时读不到，用文件名可保证同一本书 book_id 稳定，不会重复入库）
+function Ruminate:_fileNameTitle()
+    local path = self.ui and self.ui.document and self.ui.document.file
+    if not path or path == "" then return nil end
+    local name = path:match("([^/\\]+)$") or path   -- 去目录
+    name = name:gsub("%.[^.]+$", "")                 -- 去扩展名
+    name = name:gsub("^%s+", ""):gsub("%s+$", "")    -- trim
+    if name == "" then return nil end
+    return name
+end
+
 function Ruminate:_bookMeta()
-    local title, author = _("未知书籍"), ""
+    local title, author = nil, ""
     if self.ui and self.ui.document then
         local props = self.ui.document:getProps() or {}
-        title = (props.title and props.title ~= "" and props.title) or title
+        if props.title and props.title ~= "" then
+            title = props.title
+        end
         author = props.authors or props.author or ""
     end
+    -- 元数据无标题时用文件名兜底，最后才退回“未知书籍”；
+    -- 关键：同一本书任何时候都算出同一个 title -> 同一个 book_id，避免重复。
+    title = title or self:_fileNameTitle() or _("未知书籍")
     return { title = title, author = author }
 end
 
