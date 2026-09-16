@@ -8,5 +8,5 @@ return {
     name = "ruminate",
     fullname = _("Ruminote 如觅书摘"),
     description = _("划线自动同步到 Ruminote 云端，随时回看、反复咀嚼你收藏的好句子。"),
-    version = "1.0.0",
+    version = "1.0.1",
 }
